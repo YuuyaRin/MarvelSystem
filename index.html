@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MARVEL 宇宙观影指挥中心</title>
+<meta name="theme-color" content="#0a0d14">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%23e62429'/><text x='50' y='72' font-size='60' font-family='Arial Black' font-weight='900' fill='white' text-anchor='middle'>M</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="app-shell">
+
+  <!-- ===== 侧边导航 ===== -->
+  <nav id="sidebar">
+    <div class="logo" id="logo-home" title="回到指挥中心">
+      <div class="logo-mark">MARVEL</div>
+      <div class="logo-sub">宇宙观影指挥中心</div>
+    </div>
+
+    <div class="nav-items">
+      <a class="nav-item" data-view="dashboard"><span class="nav-ico">🛰️</span><span class="nav-label">指挥中心</span></a>
+      <a class="nav-item" data-view="routes"><span class="nav-ico">🎯</span><span class="nav-label">观影路线</span></a>
+      <a class="nav-item" data-view="database"><span class="nav-ico">🗂️</span><span class="nav-label">资料库</span></a>
+      <a class="nav-item" data-view="characters"><span class="nav-ico">🧬</span><span class="nav-label">角色图谱</span></a>
+      <a class="nav-item" data-view="timeline"><span class="nav-ico">⏳</span><span class="nav-label">时间线</span></a>
+      <a class="nav-item" data-view="map"><span class="nav-ico">🕸️</span><span class="nav-label">宇宙链路</span></a>
+      <a class="nav-item" data-view="lore"><span class="nav-ico">📖</span><span class="nav-label">宇宙百科</span></a>
+      <a class="nav-item" data-view="profile"><span class="nav-ico">🏅</span><span class="nav-label">我的档案</span></a>
+    </div>
+
+    <div class="sidebar-foot">
+      <div class="mini-progress">
+        <div class="mini-progress-label"><span id="side-progress-text">0 / 0</span></div>
+        <div class="mini-progress-bar"><div id="side-progress-fill"></div></div>
+      </div>
+      <div class="stones-mini" id="stones-mini" title="无限宝石收集进度"></div>
+    </div>
+  </nav>
+
+  <!-- ===== 主内容区 ===== -->
+  <main id="main">
+    <header id="topbar">
+      <div class="search-wrap">
+        <input id="global-search" type="search" placeholder="搜索作品 / 角色 / 关键词…(按 / 聚焦)" autocomplete="off">
+        <div id="search-results" class="hidden"></div>
+      </div>
+      <button id="btn-spoiler" class="btn btn-ghost" title="开启后,未看作品的简介与看点会被遮罩">🙈 剧透保护:开</button>
+      <button id="btn-random" class="btn btn-ghost" title="不知道看什么?随机抽一部!">🎲 随机来一部</button>
+    </header>
+
+    <div id="view-container"></div>
+  </main>
+</div>
+
+<!-- ===== 详情弹窗 ===== -->
+<div id="modal-backdrop" class="hidden">
+  <div id="modal-card"></div>
+</div>
+
+<!-- ===== 提示气泡 ===== -->
+<div id="toast-zone"></div>
+
+<!-- ===== 响指特效层 ===== -->
+<div id="snap-layer" class="hidden"></div>
+
+<script src="js/data.js?v=11"></script>
+<script src="js/posters.js?v=11"></script>
+<script src="js/characters.js?v=11"></script>
+<script src="js/lore.js?v=11"></script>
+<script src="js/insights.js?v=11"></script>
+<script src="js/routes.js?v=11"></script>
+<script src="js/store.js?v=11"></script>
+<script src="js/report.js?v=11"></script>
+<script src="js/timeline-axis.js?v=11"></script>
+<script src="js/lab3d.js?v=11"></script>
+<script src="js/app.js?v=11"></script>
+</body>
+</html>
