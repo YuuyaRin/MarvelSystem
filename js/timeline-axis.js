@@ -132,12 +132,15 @@
     goto(xOf('2008-01-01') - 80);
 
     let pan = null;
+    const pinching = () => svg.__pinch && svg.__pinch.size >= 2;
     svg.addEventListener('pointerdown', e => {
+      if (pinching()) { pan = null; return; }
       if (e.target.closest('.ax-item')) return;
       pan = { px: e.clientX, py: e.clientY };
       svg.setPointerCapture(e.pointerId);
     });
     svg.addEventListener('pointermove', e => {
+      if (pinching()) { pan = null; return; }
       if (!pan) return;
       const s = vb.w / svg.getBoundingClientRect().width;
       vb.x -= (e.clientX - pan.px) * s;
@@ -165,6 +168,7 @@
       zoomAt(e.deltaY > 0 ? 1.12 : 0.89, cx, cy);
     }, { passive: false });
 
+    if (MARVEL.pinch) MARVEL.pinch(svg, (f, px, py) => { const r = svg.getBoundingClientRect(); zoomAt(f, vb.x + (px - r.left) / r.width * vb.w, vb.y + (py - r.top) / r.height * vb.h); });
     const btn = id => document.getElementById(id);
     const center = () => ({ cx: vb.x + vb.w / 2, cy: vb.y + vb.h / 2 });
     btn('ax-zoomin').onclick = () => { const c = center(); zoomAt(0.8, c.cx, c.cy); };

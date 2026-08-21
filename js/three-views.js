@@ -10,6 +10,8 @@
   const BODY_FONT = '"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
   const DISPLAY_FONT = '"Bebas Neue",Impact,"Arial Narrow",sans-serif';
   const noop = () => {};
+  const COARSE = window.matchMedia && matchMedia('(pointer: coarse)').matches; // 触屏设备
+  const LABEL_K = COARSE ? 1.28 : 1;
 
   function loadThree() {
     if (window.THREE) return Promise.resolve();
@@ -94,6 +96,7 @@
 
   /* 星尘/星空 */
   function dust(n, spread, y, size, opacity, color) {
+    if (COARSE) n = Math.round(n * 0.55);
     const geo = new THREE.BufferGeometry();
     const pos = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) { pos[i * 3] = (Math.random() - 0.5) * spread; pos[i * 3 + 1] = y + (Math.random() - 0.5) * (y ? y : spread * 0.6); pos[i * 3 + 2] = (Math.random() - 0.5) * spread; }
@@ -136,7 +139,7 @@
     });
     const tex = new THREE.CanvasTexture(c); tex.minFilter = THREE.LinearFilter;
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: opts.opacity == null ? 1 : opts.opacity }));
-    const k = opts.worldPerPx || 0.012;
+    const k = (opts.worldPerPx || 0.012) * LABEL_K;
     sp.scale.set(w * k, h * k, 1);
     sp.raycast = noop;
     return sp;
@@ -220,18 +223,29 @@
       this.target = new THREE.Vector3(...(o.target || [0, 0, 0]));
       this.yaw = this.yawT = o.yaw || 0; this.pitch = this.pitchT = o.pitch == null ? 0.9 : o.pitch; this.dist = this.distT = o.dist || 20;
       this.moved = 0; this.drag = null; this.idle = 0; this.t = 0;
-      this._down = e => { this.drag = { x: e.clientX, y: e.clientY }; this.moved = 0; this.idle = 0; dom.setPointerCapture(e.pointerId); };
+      this.pointers = new Map(); this.pinchD = 0;
+      const pinchDist = () => { const [a, b] = [...this.pointers.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+      this._down = e => {
+        this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); this.idle = 0;
+        dom.setPointerCapture(e.pointerId);
+        if (this.pointers.size === 1) { this.drag = { x: e.clientX, y: e.clientY }; this.moved = 0; }
+        else { this.drag = null; this.pinchD = pinchDist(); this.moved = 99; }
+      };
       this._move = e => {
+        const p = this.pointers.get(e.pointerId); if (!p) return;
+        const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+        this.moved += Math.abs(dx) + Math.abs(dy);
+        if (this.pointers.size >= 2) { const d = pinchDist(); if (this.pinchD > 0 && d > 0) { this.distT *= this.pinchD / d; this.clamp(); } this.pinchD = d; return; }
         if (!this.drag) return;
-        const dx = e.clientX - this.drag.x, dy = e.clientY - this.drag.y;
-        this.drag.x = e.clientX; this.drag.y = e.clientY; this.moved += Math.abs(dx) + Math.abs(dy);
-        this.yawT -= dx * 0.004; this.pitchT += dy * 0.004;
+        const s = e.pointerType === 'touch' ? 0.006 : 0.004;
+        this.yawT -= dx * s; this.pitchT += dy * s;
         this.clamp();
       };
-      this._up = () => { this.drag = null; };
+      this._up = e => { this.pointers.delete(e.pointerId); if (this.pointers.size < 2) this.pinchD = 0; if (this.pointers.size === 0) this.drag = null; };
       this._wheel = e => { e.preventDefault(); this.idle = 0; this.distT *= e.deltaY > 0 ? 1.08 : 0.93; this.clamp(); };
       dom.addEventListener('pointerdown', this._down); dom.addEventListener('pointermove', this._move);
-      dom.addEventListener('pointerup', this._up); dom.addEventListener('wheel', this._wheel, { passive: false });
+      dom.addEventListener('pointerup', this._up); dom.addEventListener('pointercancel', this._up);
+      dom.addEventListener('wheel', this._wheel, { passive: false });
       this.update();
     }
     clamp() {
@@ -257,7 +271,7 @@
     reset() { this.yawT = this.o.yaw || 0; this.pitchT = this.o.pitch; this.distT = this.o.dist; this.idle = 0; }
     dispose() {
       this.dom.removeEventListener('pointerdown', this._down); this.dom.removeEventListener('pointermove', this._move);
-      this.dom.removeEventListener('pointerup', this._up); this.dom.removeEventListener('wheel', this._wheel);
+      this.dom.removeEventListener('pointerup', this._up); this.dom.removeEventListener('pointercancel', this._up); this.dom.removeEventListener('wheel', this._wheel);
     }
   }
 
@@ -269,36 +283,54 @@
     const canvas = document.createElement('canvas'); host.insertBefore(canvas, host.firstChild);
     const tip = document.createElement('div'); tip.className = 'three-tip hidden'; host.appendChild(tip);
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.setPixelRatio(Math.min(COARSE ? 1.6 : 2, window.devicePixelRatio || 1));
     renderer.setClearColor(clear || 0x0b1020, 1);
     renderer.outputEncoding = THREE.sRGBEncoding;
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 500);
-    const ctx = { kind, host, canvas, tip, renderer, scene, camera, pickables: [], hovered: null, raf: 0, disposers: [], t: 0 };
+    const ctx = { kind, host, canvas, tip, renderer, scene, camera, pickables: [], hovered: null, raf: 0, disposers: [], t: 0, touch: COARSE, portrait: host.clientWidth < host.clientHeight * 1.05 };
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2(-9, -9);
+    let downAt = null;
     const resize = () => { const w = host.clientWidth, h = host.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
     const ro = new ResizeObserver(resize); ro.observe(host); ctx.disposers.push(() => ro.disconnect()); resize();
 
+    const setPointerFrom = e => { const r = canvas.getBoundingClientRect(); pointer.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); return r; };
     canvas.addEventListener('pointermove', e => {
-      const r = canvas.getBoundingClientRect();
-      pointer.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      if (e.pointerType === 'touch') return; // 触屏不做悬停
+      const r = setPointerFrom(e);
       tip.style.left = `${e.clientX - r.left + 14}px`; tip.style.top = `${e.clientY - r.top + 14}px`;
     });
-    canvas.addEventListener('pointerleave', () => pointer.set(-9, -9));
-    canvas.addEventListener('pointerup', () => { if (ctx.cam && ctx.cam.moved > 6) return; if (ctx.hovered && ctx.onClick) ctx.onClick(ctx.hovered); });
-
-    ctx.pick = () => {
-      raycaster.setFromCamera(pointer, camera);
-      const hit = raycaster.intersectObjects(ctx.pickables, false)[0];
-      const obj = hit ? hit.object : null;
-      if (obj !== ctx.hovered) {
-        const prev = ctx.hovered; ctx.hovered = obj;
-        canvas.style.cursor = obj ? 'pointer' : 'grab';
-        if (ctx.onHover) ctx.onHover(obj, prev);
-        if (obj && obj.userData.tip) { tip.innerHTML = obj.userData.tip; tip.classList.remove('hidden'); } else tip.classList.add('hidden');
+    canvas.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') pointer.set(-9, -9); });
+    canvas.addEventListener('pointerdown', e => { downAt = { x: e.clientX, y: e.clientY, type: e.pointerType }; if (e.pointerType === 'touch') ctx.touch = true; });
+    canvas.addEventListener('pointerup', e => {
+      const moved = (ctx.cam && ctx.cam.moved > 8) || (downAt && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 8);
+      if (moved) return;
+      if (e.pointerType === 'touch') {
+        // 触屏:第一次点按 = 选中并弹出信息条,再点同一目标 = 打开详情
+        setPointerFrom(e);
+        const obj = ctx.raycast();
+        if (obj && obj === ctx.hovered) { if (ctx.onClick) ctx.onClick(obj); return; }
+        ctx.setHover(obj);
+        return;
       }
+      if (ctx.hovered && ctx.onClick) ctx.onClick(ctx.hovered);
+    });
+    tip.addEventListener('click', e => { if (e.target.closest('[data-three-open]') && ctx.hovered && ctx.onClick) ctx.onClick(ctx.hovered); });
+
+    ctx.raycast = () => { raycaster.setFromCamera(pointer, camera); const hit = raycaster.intersectObjects(ctx.pickables, false)[0]; return hit ? hit.object : null; };
+    ctx.setHover = obj => {
+      if (obj === ctx.hovered) return;
+      const prev = ctx.hovered; ctx.hovered = obj;
+      canvas.style.cursor = obj ? 'pointer' : 'grab';
+      if (ctx.onHover) ctx.onHover(obj, prev);
+      if (obj && obj.userData.tip) {
+        tip.classList.toggle('sheet', ctx.touch);
+        tip.innerHTML = ctx.touch ? `<div class="tip-body">${obj.userData.tip}</div><button class="btn btn-primary btn-sm" data-three-open>查看详情 →</button>` : obj.userData.tip;
+        tip.classList.remove('hidden');
+      } else tip.classList.add('hidden');
     };
+    ctx.pick = () => { if (ctx.touch) return; ctx.setHover(ctx.raycast()); };
     let last = performance.now();
     const loop = now => {
       ctx.raf = requestAnimationFrame(loop);
@@ -440,7 +472,8 @@
       });
     };
 
-    ctx.cam = new Orbit(camera, ctx.canvas, { target: [1.5, 0.2, -2.5], yaw: 0, pitch: 0.88, dist: 27, yawRange: 0.45, minPitch: 0.55, maxPitch: 1.15, minDist: 14, maxDist: 42, sway: 0.03 });
+    const pb = ctx.portrait ? 1.5 : 1;
+    ctx.cam = new Orbit(camera, ctx.canvas, { target: ctx.portrait ? [0, 0.2, 0] : [1.5, 0.2, -2.5], yaw: 0, pitch: ctx.portrait ? 1.0 : 0.88, dist: 27 * pb, yawRange: 0.45, minPitch: 0.55, maxPitch: 1.2, minDist: 12, maxDist: 46 * pb, sway: 0.03 });
   }
 
   /* ========================================================================
@@ -574,7 +607,8 @@
       });
     };
 
-    ctx.cam = new Orbit(camera, ctx.canvas, { target: [0, 0, 0], yaw: 0.6, pitch: 0.98, dist: 38, minPitch: 0.6, maxPitch: 1.3, minDist: 18, maxDist: 52, idleRotate: 0.025, sway: 0.02 });
+    const pb = ctx.portrait ? 1.55 : 1;
+    ctx.cam = new Orbit(camera, ctx.canvas, { target: [0, 0, 0], yaw: 0.6, pitch: ctx.portrait ? 1.15 : 0.98, dist: 38 * pb, minPitch: 0.6, maxPitch: 1.35, minDist: 16, maxDist: 56 * pb, idleRotate: 0.025, sway: 0.02 });
   }
 
   /* ========================================================================
@@ -706,7 +740,17 @@
     const startT = tOf(firstIdx(w => w.release >= '2008-01-01')) - 0.012;
     const rc = { t: startT, tT: startT, yaw: 0, yawT: 0, pitch: 0, pitchT: 0, moved: 0, drag: null };
     const onDown = e => { rc.drag = { x: e.clientX, y: e.clientY }; rc.moved = 0; ctx.canvas.setPointerCapture(e.pointerId); };
-    const onMove = e => { if (!rc.drag) return; const dx = e.clientX - rc.drag.x, dy = e.clientY - rc.drag.y; rc.drag.x = e.clientX; rc.drag.y = e.clientY; rc.moved += Math.abs(dx) + Math.abs(dy); rc.yawT = Math.max(-0.7, Math.min(0.7, rc.yawT - dx * 0.003)); rc.pitchT = Math.max(-0.25, Math.min(0.35, rc.pitchT + dy * 0.003)); };
+    const onMove = e => {
+      if (!rc.drag) return;
+      const dx = e.clientX - rc.drag.x, dy = e.clientY - rc.drag.y; rc.drag.x = e.clientX; rc.drag.y = e.clientY; rc.moved += Math.abs(dx) + Math.abs(dy);
+      if (e.pointerType === 'touch') {
+        // 触屏:上滑前进 / 下滑后退,左右滑微调视角
+        rc.tT = Math.max(0.005, Math.min(0.985, rc.tT - dy * 0.00022));
+        rc.yawT = Math.max(-0.6, Math.min(0.6, rc.yawT - dx * 0.002));
+        return;
+      }
+      rc.yawT = Math.max(-0.7, Math.min(0.7, rc.yawT - dx * 0.003)); rc.pitchT = Math.max(-0.25, Math.min(0.35, rc.pitchT + dy * 0.003));
+    };
     const onUp = () => { rc.drag = null; };
     // 滚轮向上(手指向前推)= 向未来前进
     const onWheel = e => { e.preventDefault(); rc.tT = Math.max(0.005, Math.min(0.985, rc.tT - Math.sign(e.deltaY) * Math.min(1, Math.abs(e.deltaY) / 60) * 0.55 / (n + 3))); };
@@ -722,7 +766,8 @@
         this.moved = rc.moved;
         const { p, T, N } = frame(Math.max(0.001, Math.min(0.999, rc.t)));
         const ahead = river.getPointAt(Math.min(0.994, rc.t + 0.028));
-        const eye = p.clone().sub(T.clone().multiplyScalar(7.5)).add(N.clone().multiplyScalar(Math.sin(ctx.t * 0.2) * 0.8)).setY(3.4 + Math.sin(ctx.t * 0.5) * 0.08);
+        const back = ctx.portrait ? 10 : 7.5, high = ctx.portrait ? 4.4 : 3.4;
+        const eye = p.clone().sub(T.clone().multiplyScalar(back)).add(N.clone().multiplyScalar(Math.sin(ctx.t * 0.2) * 0.8)).setY(high + Math.sin(ctx.t * 0.5) * 0.08);
         camera.position.lerp(eye, Math.min(1, dt * 4));
         const look = ahead.clone().setY(1.3);
         const rot = new THREE.Vector3().subVectors(look, camera.position).applyAxisAngle(up, rc.yaw);

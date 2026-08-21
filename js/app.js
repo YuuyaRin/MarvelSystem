@@ -14,6 +14,22 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  /* 双指捏合缩放助手(SVG 视图):onZoom(factor, clientX, clientY);el.__pinch 为当前触点集合 */
+  MARVEL.pinch = function (el, onZoom) {
+    const pts = new Map(); let d0 = 0;
+    el.__pinch = pts;
+    const dist = () => { const [a, b] = [...pts.values()]; return Math.hypot(a[0] - b[0], a[1] - b[1]); };
+    el.addEventListener('pointerdown', e => { pts.set(e.pointerId, [e.clientX, e.clientY]); if (pts.size === 2) d0 = dist(); });
+    el.addEventListener('pointermove', e => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, [e.clientX, e.clientY]);
+      if (pts.size === 2 && d0 > 0) { const d = dist(); const [a, b] = [...pts.values()]; if (d > 0) onZoom(d0 / d, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2); d0 = d; }
+    });
+    const up = e => { pts.delete(e.pointerId); if (pts.size < 2) d0 = 0; };
+    el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  };
+  const pinching = el => el.__pinch && el.__pinch.size >= 2;
+
   function colorOf(w) {
     if (w.phase >= 1) return MARVEL.PHASES[w.phase].color;
     const u = MARVEL.UNIVERSES[w.universe];
@@ -644,11 +660,13 @@
 
     let pan = null;
     svg.addEventListener('pointerdown', e => {
+      if (pinching(svg)) { pan = null; return; }
       if (e.target.closest('.metro-station')) return;
       pan = { px: e.clientX, py: e.clientY };
       svg.setPointerCapture(e.pointerId);
     });
     svg.addEventListener('pointermove', e => {
+      if (pinching(svg)) { pan = null; return; }
       if (!pan) return;
       const s = vb.w / svg.getBoundingClientRect().width;
       vb.x -= (e.clientX - pan.px) * s;
@@ -675,6 +693,7 @@
       zoomAt(e.deltaY > 0 ? 1.12 : 0.89, cx, cy);
     }, { passive: false });
 
+    MARVEL.pinch(svg, (f, px, py) => { const r = svg.getBoundingClientRect(); zoomAt(f, vb.x + (px - r.left) / r.width * vb.w, vb.y + (py - r.top) / r.height * vb.h); });
     const btn = id => document.getElementById(id);
     const center = () => ({ cx: vb.x + vb.w / 2, cy: vb.y + vb.h / 2 });
     if (btn('mt-zoomin')) btn('mt-zoomin').onclick = () => { const c = center(); zoomAt(0.8, c.cx, c.cy); };
@@ -942,6 +961,7 @@
     let pan = null;
 
     svg.addEventListener('pointerdown', e => {
+      if (pinching(svg)) { dragNode = null; pan = null; return; }
       const g = e.target.closest('.char-node');
       if (g) {
         dragNode = byId[g.dataset.char];
@@ -954,6 +974,7 @@
     });
 
     svg.addEventListener('pointermove', e => {
+      if (pinching(svg)) { dragNode = null; pan = null; return; }
       const s = toSVGScale();
       if (dragNode) {
         dragNode.x = Math.max(70, Math.min(W - 70, dragNode.x + e.movementX * s));
@@ -997,6 +1018,7 @@
       const cy = vb.y + (e.clientY - rect.top) / rect.height * vb.h;
       zoomAt(e.deltaY > 0 ? 1.12 : 0.89, cx, cy);
     }, { passive: false });
+    MARVEL.pinch(svg, (f, px, py) => { const r = svg.getBoundingClientRect(); zoomAt(f, vb.x + (px - r.left) / r.width * vb.w, vb.y + (py - r.top) / r.height * vb.h); });
 
     const center = () => ({ cx: vb.x + vb.w / 2, cy: vb.y + vb.h / 2 });
     const btn = id => document.getElementById(id);
