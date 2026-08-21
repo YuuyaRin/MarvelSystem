@@ -142,6 +142,69 @@
     return sp;
   }
 
+  /* 发光圆环序号徽章 */
+  function badgeSprite(num, color) {
+    const c = document.createElement('canvas'); c.width = c.height = 160;
+    const g = c.getContext('2d');
+    g.shadowColor = color; g.shadowBlur = 22;
+    g.strokeStyle = color; g.lineWidth = 6;
+    g.beginPath(); g.arc(80, 80, 54, 0, Math.PI * 2); g.stroke();
+    g.shadowBlur = 0;
+    g.fillStyle = 'rgba(6,8,18,0.72)';
+    g.beginPath(); g.arc(80, 80, 51, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#fff'; g.font = `900 62px ${DISPLAY_FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.shadowColor = color; g.shadowBlur = 14;
+    g.fillText(String(num), 80, 86);
+    const tex = new THREE.CanvasTexture(c); tex.minFilter = THREE.LinearFilter;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    sp.scale.set(1.25, 1.25, 1); sp.raycast = noop;
+    return sp;
+  }
+
+  /* 设计化占位海报(阶段渐变 + 表情 + 片名) */
+  function placeholderPoster(w, color) {
+    const c = document.createElement('canvas'); c.width = 340; c.height = 510;
+    const g = c.getContext('2d');
+    const grad = g.createLinearGradient(0, 0, 340, 510);
+    grad.addColorStop(0, color); grad.addColorStop(1, '#0a0d14');
+    g.fillStyle = grad; g.fillRect(0, 0, 340, 510);
+    g.fillStyle = 'rgba(255,255,255,0.08)';
+    for (let y = 8; y < 510; y += 18) for (let x = 8; x < 340; x += 18) { g.beginPath(); g.arc(x, y, 1.4, 0, 7); g.fill(); }
+    g.font = '150px serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = 24;
+    g.fillText(w.emoji, 170, 215);
+    g.shadowBlur = 0;
+    const sh = g.createLinearGradient(0, 300, 0, 510); sh.addColorStop(0, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,0.85)');
+    g.fillStyle = sh; g.fillRect(0, 300, 340, 210);
+    g.fillStyle = '#fff'; g.font = `900 30px ${BODY_FONT}`;
+    const t = w.title.length > 10 ? w.title.slice(0, 10) + '…' : w.title;
+    g.fillText(t, 170, 420);
+    g.fillStyle = '#f0b429'; g.font = `34px ${DISPLAY_FONT}`;
+    g.fillText(w.release.slice(0, 4), 170, 465);
+    const tex = new THREE.CanvasTexture(c); tex.encoding = THREE.sRGBEncoding;
+    return tex;
+  }
+
+  /* 海报纹理:跨挂载缓存 + 限并发 + 重试 */
+  const posterCache = {};
+  const posterQueue = []; let posterActive = 0;
+  function loadPoster(url) {
+    if (posterCache[url]) return posterCache[url];
+    posterCache[url] = new Promise(resolve => {
+      posterQueue.push({ url, resolve, tries: 0 });
+      pumpPosters();
+    });
+    return posterCache[url];
+  }
+  function pumpPosters() {
+    while (posterActive < 4 && posterQueue.length) {
+      const job = posterQueue.shift(); posterActive++;
+      const loader = new THREE.TextureLoader(); loader.setCrossOrigin('anonymous');
+      loader.load(job.url, tex => { tex.encoding = THREE.sRGBEncoding; posterActive--; job.resolve(tex); pumpPosters(); },
+        undefined, () => { posterActive--; if (job.tries < 2) { job.tries++; setTimeout(() => { posterQueue.push(job); pumpPosters(); }, 1200 * job.tries); } else { delete posterCache[job.url]; job.resolve(null); } pumpPosters(); });
+    }
+  }
+
   /* 不可见的拾取体 */
   function pickBody(r) {
     const m = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 8), new THREE.MeshBasicMaterial({ visible: false }));
@@ -202,8 +265,8 @@
      场景骨架
      ======================================================================== */
   function createStage(host, kind, clear) {
-    host.innerHTML = '';
-    const canvas = document.createElement('canvas'); host.appendChild(canvas);
+    host.querySelectorAll('canvas, .three-tip, .three-loading').forEach(el => el.remove());
+    const canvas = document.createElement('canvas'); host.insertBefore(canvas, host.firstChild);
     const tip = document.createElement('div'); tip.className = 'three-tip hidden'; host.appendChild(tip);
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
@@ -258,7 +321,7 @@
       mats.forEach(m => { if (m.map && !Object.values(texCache).includes(m.map)) m.map.dispose(); m.dispose(); });
     });
     ctx.renderer.dispose();
-    if (ctx.host.isConnected) ctx.host.innerHTML = '';
+    if (ctx.host.isConnected) ctx.host.querySelectorAll('canvas, .three-tip, .three-loading').forEach(el => el.remove());
   }
 
   const shortTitle = w => { if (w.title.length <= 7) return w.title; const p = w.title.split(/[::]/); if (p.length < 2) return w.title; if (/\d/.test(p[0])) return p[0]; return p[1].length <= 6 ? p[1] : p[0]; };
@@ -290,24 +353,29 @@
   function mountCharacters(ctx, opts) {
     const { scene, camera } = ctx;
     const activeFaction = opts.activeFaction || null;
-    backdrop(scene, [[0, '#1c2150'], [0.45, '#0e1230'], [1, '#070913']]);
+    backdrop(scene, [[0, '#10132e'], [0.5, '#080a1b'], [1, '#04050b']]);
     lights(scene, 0.8);
-    scene.fog = new THREE.FogExp2(0x0b1028, 0.012);
-    scene.add(dust(900, 90, 6, 0.12, 0.4));
-    scene.add(dust(300, 40, 1.5, 0.07, 0.3, 0xffe9c0));
+    scene.fog = new THREE.FogExp2(0x07091a, 0.01);
+    const dustA = dust(1200, 110, 8, 0.11, 0.5); scene.add(dustA);
+    const dustB = dust(400, 60, 2, 0.2, 0.35, 0xdfe6ff); scene.add(dustB);
+    const band = glow('#4a56b8', 1, 0.07); band.scale.set(140, 30, 1); band.position.set(-10, 18, -70); scene.add(band);
+    [8.5, 13.5, 18.5].forEach((r, i) => {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(r - 0.025, r + 0.025, 160), new THREE.MeshBasicMaterial({ color: 0x7484d8, transparent: true, opacity: 0.13 - i * 0.03, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+      ring.rotation.x = -Math.PI / 2; ring.position.y = -0.75; ring.raycast = noop; scene.add(ring);
+    });
 
     const W = 1300, H = 900, K = 0.02;
     const { nodes, edges } = layoutCharacters(W, H);
     const toWorld = n => new THREE.Vector3((n.x - W / 2) * K, 0, (n.y - H / 2) * K);
 
     // 银河盘面 + 阵营星云
-    const disc = groundGlow('#2b3470', 21, 0.28); disc.position.y = -0.9; scene.add(disc);
+    const disc = groundGlow('#222a60', 21, 0.1); disc.position.y = -0.9; scene.add(disc);
     const byF = {};
     nodes.forEach(n => { (byF[n.c.faction] = byF[n.c.faction] || []).push(toWorld(n)); });
     Object.entries(byF).forEach(([fid, pts]) => {
       const f = MARVEL.FACTIONS[fid];
       const c = pts.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(1 / pts.length);
-      const neb = glow(f.color, 8 + pts.length * 0.7, 0.13); neb.position.copy(c).setY(-0.3); scene.add(neb);
+      const neb = glow(f.color, 6.5 + pts.length * 0.6, 0.075); neb.position.copy(c).setY(-0.3); scene.add(neb);
       const lab = makeLabel([{ text: f.name, size: 28, color: f.color, weight: 900 }], { worldPerPx: 0.013, opacity: 0.75 });
       lab.position.copy(c).setY(2.9); scene.add(lab);
     });
@@ -335,8 +403,8 @@
       const deg = (adj[n.c.id] || new Set()).size;
       const dim = activeFaction && n.c.faction !== activeFaction;
       const g = new THREE.Group(); g.position.copy(toWorld(n));
-      const core = star(f.color, 0.85 + deg * 0.09, dim ? 0.25 : 0.95);
-      const halo = glow(f.color, 1.7 + deg * 0.14, dim ? 0.08 : 0.32);
+      const core = star(f.color, 1.0 + deg * 0.1, dim ? 0.25 : 1);
+      const halo = glow(f.color, 1.5 + deg * 0.12, dim ? 0.08 : 0.3);
       const body = pickBody(0.75);
       const title = n.c.title || n.c.name, sub = n.c.title && n.c.title !== n.c.name ? n.c.name : '';
       body.userData = { id: n.c.id, tip: `<b style="color:${f.color}">${n.c.emoji} ${title}</b>${sub ? ' · ' + sub : ''}<br><small>${f.name} · ${deg} 条关系 · ${n.c.actor} · 点击查看档案</small>` };
@@ -357,11 +425,12 @@
         const base = s.dim ? 0.25 : 1;
         const on = keep ? keep.has(s.id) : true;
         const target = keep ? (on ? 1 : 0.18) : base;
-        lerpOpacity(s.core.material, target * 0.95, k); lerpOpacity(s.halo.material, target * 0.32, k); lerpOpacity(s.lab.material, keep ? (on ? 1 : 0.1) : base * 0.9, k);
+        lerpOpacity(s.core.material, target, k); lerpOpacity(s.halo.material, target * 0.3, k); lerpOpacity(s.lab.material, keep ? (on ? 1 : 0.1) : base * 0.9, k);
         const sc = (s.id === focus ? 1.6 : 1) * s.baseScale * (1 + Math.sin(t * 1.6 + s.phase) * 0.06);
         s.core.scale.x += (sc - s.core.scale.x) * k; s.core.scale.y = s.core.scale.x;
         s.g.position.y = Math.sin(t * 0.8 + s.phase) * 0.1;
       });
+      dustA.material.opacity = 0.4 + Math.sin(t * 0.9) * 0.12; dustB.material.opacity = 0.3 + Math.sin(t * 1.7 + 1) * 0.12;
       edgeObjs.forEach(o => {
         const lit = focus && (o.e.a === focus || o.e.b === focus);
         lerpOpacity(o.tube.material, lit ? 0.9 : 0, k);
@@ -371,7 +440,7 @@
       });
     };
 
-    ctx.cam = new Orbit(camera, ctx.canvas, { target: [0, 0.2, 0], yaw: 0, pitch: 0.88, dist: 27, yawRange: 0.45, minPitch: 0.55, maxPitch: 1.15, minDist: 14, maxDist: 42, sway: 0.03 });
+    ctx.cam = new Orbit(camera, ctx.canvas, { target: [1.5, 0.2, -2.5], yaw: 0, pitch: 0.88, dist: 27, yawRange: 0.45, minPitch: 0.55, maxPitch: 1.15, minDist: 14, maxDist: 42, sway: 0.03 });
   }
 
   /* ========================================================================
@@ -472,8 +541,10 @@
       g.add(ring, core, pool, body, lab); scene.add(g);
       ctx.pickables.push(body);
       if (orderMap[w.id]) {
-        const badge = makeLabel([{ text: String(orderMap[w.id]), size: 22, color: '#0a0d14', weight: 900, font: DISPLAY_FONT }], { bg: MARVEL.THREADS[activeThread].color, worldPerPx: 0.012, pad: 7 });
-        badge.position.set(0, 1.0, 0); g.add(badge);
+        const tc = MARVEL.THREADS[activeThread].color;
+        const badge = badgeSprite(orderMap[w.id], tc); badge.position.set(0, 2.0, 0); g.add(badge);
+        const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 1.4, 6), new THREE.MeshBasicMaterial({ color: tc, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
+        stem.position.y = 0.75; stem.raycast = noop; g.add(stem);
       }
       if (isNext) {
         const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.5, 7, 20, 1, true), new THREE.MeshBasicMaterial({ map: gradientTex([[0, 'rgba(240,180,41,0)'], [1, 'rgba(240,180,41,0.7)']]), transparent: true, opacity: 0.9, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
@@ -511,95 +582,138 @@
      ======================================================================== */
   function mountCorridor(ctx) {
     const { scene, camera } = ctx;
-    backdrop(scene, [[0, '#1b1f4a'], [0.55, '#0d1030'], [1, '#070913']]);
+    backdrop(scene, [[0, '#0c0f2a'], [0.55, '#07091b'], [1, '#04050c']]);
     lights(scene, 1.0);
-    scene.fog = new THREE.FogExp2(0x0d1030, 0.017);
-    scene.add(dust(1400, 160, 8, 0.14, 0.45));
+    scene.fog = new THREE.FogExp2(0x080a1c, 0.016);
+    scene.add(dust(1600, 170, 9, 0.13, 0.4));
 
     const works = MARVEL.WORKS.slice().sort((a, b) => a.release.localeCompare(b.release));
     const n = works.length, SLOT = 3.6, L = (n + 2) * SLOT;
-    // 蜿蜒河道
     const wps = []; for (let z = 0; z <= L + 20; z += 22) wps.push(new THREE.Vector3(Math.sin(z / 44) * 7.5, 0, -z));
     const river = new THREE.CatmullRomCurve3(wps, false, 'centripetal');
     const tOf = i => (i + 1.5) / (n + 3);
     const up = new THREE.Vector3(0, 1, 0);
-    const frame = t => { const p = river.getPointAt(t), T = river.getTangentAt(t).normalize(), N = new THREE.Vector3().crossVectors(T, up).normalize(); return { p, T, N }; };
-
-    // 河道光带 + 地面
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(90, L + 80), new THREE.MeshStandardMaterial({ color: 0x0c1026, roughness: 1, metalness: 0 }));
-    ground.rotation.x = -Math.PI / 2; ground.position.set(0, -0.03, -L / 2); ground.raycast = noop; scene.add(ground);
-    const rail = new THREE.Mesh(new THREE.TubeGeometry(river, 400, 0.09, 6, false), new THREE.MeshBasicMaterial({ color: 0x9fb4ff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
-    rail.raycast = noop; scene.add(rail);
-    const railGlow = new THREE.Mesh(new THREE.TubeGeometry(river, 400, 0.5, 6, false), new THREE.MeshBasicMaterial({ color: 0x4d5fc0, transparent: true, opacity: 0.08, blending: THREE.AdditiveBlending, depthWrite: false }));
-    railGlow.raycast = noop; scene.add(railGlow);
-
-    // 里程碑:年份 / 阶段之门 / 今日之门
+    const frame = t => { t = Math.max(0.002, Math.min(0.994, t)); const p = river.getPointAt(t), T = river.getTangentAt(t).normalize(), N = new THREE.Vector3().crossVectors(T, up).normalize(); return { p, T, N }; };
     const firstIdx = pred => { const i = works.findIndex(pred); return i < 0 ? n : i; };
-    const gate = (t, color, text, big) => {
-      const { p, T, N } = frame(t);
+    const colorAt = works.map(w => new THREE.Color(colorOfWork(w)));
+    const colorNear = t => colorAt[Math.max(0, Math.min(n - 1, Math.round(t * (n + 3) - 1.5)))];
+
+    /* ---------- 地面 + 发光河面缎带 ---------- */
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, L + 90), new THREE.MeshStandardMaterial({ color: 0x090c1c, roughness: 1, metalness: 0 }));
+    ground.rotation.x = -Math.PI / 2; ground.position.set(0, -0.03, -L / 2); ground.raycast = noop; scene.add(ground);
+    const ribbon = (width, stops, opacity, y) => {
+      const SEG = 420, posArr = [], uvArr = [], idx = [];
+      for (let i = 0; i <= SEG; i++) {
+        const t = i / SEG, { p, N } = frame(Math.min(0.9999, t));
+        const l = p.clone().add(N.clone().multiplyScalar(-width / 2)), r = p.clone().add(N.clone().multiplyScalar(width / 2));
+        posArr.push(l.x, y, l.z, r.x, y, r.z); uvArr.push(t, 0, t, 1);
+        if (i < SEG) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(posArr, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvArr, 2));
+      geo.setIndex(idx);
+      const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: gradientTex(stops), transparent: true, opacity, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+      m.raycast = noop; return m;
+    };
+    scene.add(ribbon(4.2, [[0, 'rgba(90,110,255,0)'], [0.5, 'rgba(150,170,255,0.75)'], [1, 'rgba(90,110,255,0)']], 0.45, 0.02));
+    scene.add(ribbon(1.2, [[0, 'rgba(200,215,255,0)'], [0.5, 'rgba(230,238,255,1)'], [1, 'rgba(200,215,255,0)']], 0.6, 0.03));
+    scene.add(ribbon(11, [[0, 'rgba(60,70,160,0)'], [0.5, 'rgba(70,85,190,0.35)'], [1, 'rgba(60,70,160,0)']], 0.25, 0.01));
+
+    /* ---------- 时光隧道:沿河道的光拱 ---------- */
+    const arcs = [];
+    for (let d = 6; d < L - 2; d += 5.5) {
+      const t = d / L;
+      const { p, T } = frame(t);
+      const col = colorNear(t);
       const g = new THREE.Group(); g.position.copy(p); g.lookAt(p.clone().sub(T));
-      const arch = new THREE.Mesh(new THREE.TorusGeometry(big ? 5.2 : 4.2, big ? 0.1 : 0.06, 10, 64, Math.PI), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: big ? 0.95 : 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
+      const arc = new THREE.Mesh(new THREE.TorusGeometry(7.2, 0.03, 8, 72, Math.PI), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false }));
+      arc.raycast = noop; g.add(arc); scene.add(g); arcs.push({ arc, t });
+    }
+
+    /* ---------- 流向未来的光粒子 ---------- */
+    const PN = 420, pGeo = new THREE.BufferGeometry(), pPos = new Float32Array(PN * 3), pT = new Float32Array(PN), pOff = new Float32Array(PN * 2);
+    for (let i = 0; i < PN; i++) { pT[i] = Math.random(); pOff[i * 2] = (Math.random() - 0.5) * 3.2; pOff[i * 2 + 1] = 0.15 + Math.random() * 1.6; }
+    pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+    const flow = new THREE.Points(pGeo, new THREE.PointsMaterial({ color: 0xcfd8ff, size: 0.16, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending, map: radialTex('#ffffff', 0.2) }));
+    flow.raycast = noop; scene.add(flow);
+    const updateFlow = dt => {
+      for (let i = 0; i < PN; i++) {
+        pT[i] += dt * 0.012; if (pT[i] > 0.994) pT[i] -= 0.992;
+        const { p, N } = frame(pT[i]);
+        pPos[i * 3] = p.x + N.x * pOff[i * 2]; pPos[i * 3 + 1] = pOff[i * 2 + 1]; pPos[i * 3 + 2] = p.z + N.z * pOff[i * 2];
+      }
+      pGeo.attributes.position.needsUpdate = true;
+    };
+    updateFlow(0);
+    // 低空薄雾
+    for (let d = 10; d < L; d += 24) { const { p } = frame(d / L); const m = glow('#6a7ae0', 16, 0.05); m.position.copy(p).setY(0.8); scene.add(m); }
+
+    /* ---------- 里程碑:阶段之门 / 今日之门 / 年份 ---------- */
+    const gate = (t, color, text, big) => {
+      const { p, T } = frame(t);
+      const g = new THREE.Group(); g.position.copy(p); g.lookAt(p.clone().sub(T));
+      const arch = new THREE.Mesh(new THREE.TorusGeometry(big ? 5.4 : 4.6, big ? 0.12 : 0.07, 10, 72, Math.PI), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: big ? 0.95 : 0.6, blending: THREE.AdditiveBlending, depthWrite: false }));
       arch.raycast = noop; g.add(arch);
-      const lab = makeLabel([{ text, size: big ? 30 : 24, color, weight: 900, font: DISPLAY_FONT }], { worldPerPx: big ? 0.016 : 0.012, opacity: 0.95, bg: big ? 'rgba(7,9,19,0.6)' : null });
-      lab.position.y = (big ? 5.2 : 4.2) + 0.9; g.add(lab);
+      const archGlow = new THREE.Mesh(new THREE.TorusGeometry(big ? 5.4 : 4.6, big ? 0.4 : 0.25, 10, 72, Math.PI), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false }));
+      archGlow.raycast = noop; g.add(archGlow);
+      const lab = makeLabel([{ text, size: big ? 30 : 24, color, weight: 900, font: DISPLAY_FONT }], { worldPerPx: big ? 0.016 : 0.012, opacity: 0.95, bg: 'rgba(5,7,16,0.6)' });
+      lab.position.y = (big ? 5.4 : 4.6) + 1.0; g.add(lab);
       scene.add(g);
-      const pool = groundGlow(color, big ? 5 : 3.2, big ? 0.5 : 0.25); pool.position.copy(p).setY(0.01); scene.add(pool);
-      return g;
+      const pool = groundGlow(color, big ? 5.5 : 3.4, big ? 0.45 : 0.22); pool.position.copy(p).setY(0.015); scene.add(pool);
     };
     for (let y = 2001; y <= 2028; y++) {
       const i = firstIdx(w => w.release >= `${y}-01-01`); if (i >= n) break;
-      const t = (i + 1) / (n + 3);
-      const { p, N } = frame(t);
-      const lab = makeLabel([{ text: String(y), size: 30, color: '#aab4d8', weight: 400, font: DISPLAY_FONT }], { worldPerPx: 0.014, opacity: 0.8 });
-      lab.position.copy(p).add(N.clone().multiplyScalar(-6.2)).setY(0.4); scene.add(lab);
-      const tick = new THREE.Mesh(new THREE.PlaneGeometry(10, 0.05), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.15, blending: THREE.AdditiveBlending, depthWrite: false }));
-      tick.rotation.x = -Math.PI / 2; tick.position.copy(p).setY(0.015); tick.lookAt(p.clone().add(up)); tick.rotation.z = Math.atan2(N.z, N.x); tick.raycast = noop;
+      const { p, N } = frame((i + 1) / (n + 3));
+      const lab = makeLabel([{ text: String(y), size: 30, color: '#aab4d8', weight: 400, font: DISPLAY_FONT }], { worldPerPx: 0.014, opacity: 0.75 });
+      lab.position.copy(p).add(N.clone().multiplyScalar(-6.4)).setY(0.45); scene.add(lab);
     }
     [1, 2, 3, 4, 5, 6].forEach(ph => { const i = firstIdx(w => w.phase === ph); if (i < n) gate((i + 1.1) / (n + 3), MARVEL.PHASES[ph].color, `${MARVEL.PHASES[ph].en} · ${MARVEL.PHASES[ph].name}`, false); });
     const todayI = firstIdx(w => w.release > S().today());
     const todayT = (todayI + 1) / (n + 3);
     gate(todayT, '#f0b429', `TODAY · ${S().today().replace(/-/g, '.')}`, true);
 
-    // 海报立牌:交错立于两岸
-    const loader = new THREE.TextureLoader(); loader.setCrossOrigin('anonymous');
+    /* ---------- 海报立牌 ---------- */
     const cardGeo = new THREE.PlaneGeometry(1.7, 2.55), frameGeo = new THREE.PlaneGeometry(1.84, 2.69);
-    const cards = [], colorAt = [];
+    const cards = [];
     works.forEach((w, i) => {
       const t = tOf(i);
       const { p, T, N } = frame(t);
       const side = i % 2 ? 1 : -1;
-      const off = 2.6 + ((i * 7) % 3) * 0.55;
+      const off = 2.8 + ((i * 7) % 3) * 0.5;
       const watched = S().isWatched(w.id);
-      const col = new THREE.Color(colorOfWork(w)); colorAt.push(col);
+      const colHex = colorOfWork(w), col = new THREE.Color(colHex);
       const g = new THREE.Group();
-      g.position.copy(p).add(N.clone().multiplyScalar(side * off)).setY(1.45);
-      g.lookAt(g.position.clone().sub(T)); g.rotateY(side * -0.35);
+      g.position.copy(p).add(N.clone().multiplyScalar(side * off)).setY(1.5);
+      g.lookAt(g.position.clone().sub(T)); g.rotateY(side * -0.38);
+      const baseQ = g.quaternion.clone(), baseY = g.position.y;
       const fr = new THREE.Mesh(frameGeo, new THREE.MeshBasicMaterial({ color: watched ? 0xf0b429 : col, transparent: true, opacity: w.upcoming ? 0.35 : 0.9 })); fr.position.z = -0.02; fr.raycast = noop; g.add(fr);
-      const mat = new THREE.MeshBasicMaterial({ color: col.clone().multiplyScalar(0.45), transparent: true, opacity: w.upcoming ? 0.5 : 1 });
+      const mat = new THREE.MeshBasicMaterial({ map: placeholderPoster(w, colHex), transparent: true, opacity: w.upcoming ? 0.55 : 1 });
       const card = new THREE.Mesh(cardGeo, mat);
-      card.userData = { id: w.id, g, tip: `<b>${w.emoji} ${w.title}</b><br><small>${w.release} · ${watched ? '✔ 已看' : (w.upcoming ? '⏳ 未上映' : '未看')}</small>` };
-      g.add(card); ctx.pickables.push(card); cards.push(card);
+      card.userData = { id: w.id, g, tip: `<b>${w.emoji} ${w.title}</b><br><small>${w.release} · ${watched ? '✔ 已看' : (w.upcoming ? '⏳ 未上映' : '未看')} · 点击查看详情</small>` };
+      g.add(card); ctx.pickables.push(card);
       const url = MARVEL.POSTERS && MARVEL.POSTERS[w.id];
-      if (url) loader.load(url, tex => { tex.encoding = THREE.sRGBEncoding; mat.map = tex; mat.color.set(0xffffff); mat.needsUpdate = true; }, undefined, noop);
-      else g.add(makeLabel([{ text: w.emoji, size: 64 }], { worldPerPx: 0.012 }));
-      if (watched) { const hg = glow('#f0b429', 3.6, 0.55); hg.position.z = -0.08; g.add(hg); }
-      const lab = makeLabel([{ text: `${watched ? '✔ ' : ''}${shortTitle(w)}`, size: 20, weight: 700, color: watched ? '#f0b429' : '#eef1f8' }, { text: w.release.slice(0, 7).replace('-', '.'), size: 14, color: '#a3acc2', weight: 500 }], { worldPerPx: 0.011, bg: 'rgba(7,9,19,0.55)', pad: 7 });
-      lab.position.set(0, -1.78, 0.05); g.add(lab);
-      const pool = groundGlow(watched ? '#f0b429' : colorOfWork(w), 1.6, watched ? 0.5 : 0.28); pool.position.copy(g.position).setY(0.02); scene.add(pool);
+      if (url) loadPoster(url).then(tex => { if (tex) { mat.map = tex; mat.needsUpdate = true; } });
+      const halo = glow(watched ? '#f0b429' : colHex, 4.2, watched ? 0.42 : 0); halo.position.z = -0.1; g.add(halo);
+      const lab = makeLabel([{ text: `${watched ? '✔ ' : ''}${shortTitle(w)}`, size: 20, weight: 700, color: watched ? '#f0b429' : '#eef1f8' }, { text: w.release.slice(0, 7).replace('-', '.'), size: 14, color: '#a3acc2', weight: 500 }], { worldPerPx: 0.011, bg: 'rgba(5,7,16,0.6)', pad: 7 });
+      lab.position.set(0, -1.8, 0.05); g.add(lab);
+      const pool = groundGlow(watched ? '#f0b429' : colHex, 1.7, watched ? 0.45 : 0.25); pool.position.copy(g.position).setY(0.02); scene.add(pool);
       scene.add(g);
+      cards.push({ card, g, baseQ, baseY, halo, lab, fr, watched, labScale: lab.scale.clone() });
     });
 
-    // 河道相机:沿河缓动巡游
+    /* ---------- 河道相机 ---------- */
     const startT = tOf(firstIdx(w => w.release >= '2008-01-01')) - 0.012;
-    const rc = { t: startT, tT: startT, yaw: 0, yawT: 0, pitch: 0, pitchT: 0, moved: 0, drag: null, idle: 0 };
+    const rc = { t: startT, tT: startT, yaw: 0, yawT: 0, pitch: 0, pitchT: 0, moved: 0, drag: null };
     const onDown = e => { rc.drag = { x: e.clientX, y: e.clientY }; rc.moved = 0; ctx.canvas.setPointerCapture(e.pointerId); };
     const onMove = e => { if (!rc.drag) return; const dx = e.clientX - rc.drag.x, dy = e.clientY - rc.drag.y; rc.drag.x = e.clientX; rc.drag.y = e.clientY; rc.moved += Math.abs(dx) + Math.abs(dy); rc.yawT = Math.max(-0.7, Math.min(0.7, rc.yawT - dx * 0.003)); rc.pitchT = Math.max(-0.25, Math.min(0.35, rc.pitchT + dy * 0.003)); };
     const onUp = () => { rc.drag = null; };
-    const onWheel = e => { e.preventDefault(); rc.tT = Math.max(0.005, Math.min(0.995, rc.tT + Math.sign(e.deltaY) * Math.min(1, Math.abs(e.deltaY) / 60) * 0.55 / (n + 3))); rc.idle = 0; };
+    // 滚轮向上(手指向前推)= 向未来前进
+    const onWheel = e => { e.preventDefault(); rc.tT = Math.max(0.005, Math.min(0.985, rc.tT - Math.sign(e.deltaY) * Math.min(1, Math.abs(e.deltaY) / 60) * 0.55 / (n + 3))); };
     ctx.canvas.addEventListener('pointerdown', onDown); ctx.canvas.addEventListener('pointermove', onMove); ctx.canvas.addEventListener('pointerup', onUp); ctx.canvas.addEventListener('wheel', onWheel, { passive: false });
     ctx.disposers.push(() => { ctx.canvas.removeEventListener('pointerdown', onDown); ctx.canvas.removeEventListener('pointermove', onMove); ctx.canvas.removeEventListener('pointerup', onUp); ctx.canvas.removeEventListener('wheel', onWheel); });
 
-    const fogTarget = new THREE.Color(0x0d1030);
+    const fogTarget = new THREE.Color(0x080a1c), tmpQ = new THREE.Quaternion(), tmpO = new THREE.Object3D();
     ctx.cam = {
       moved: 0,
       tick(dt) {
@@ -607,16 +721,14 @@
         rc.t += (rc.tT - rc.t) * k; rc.yaw += (rc.yawT - rc.yaw) * Math.min(1, dt * 5); rc.pitch += (rc.pitchT - rc.pitch) * Math.min(1, dt * 5);
         this.moved = rc.moved;
         const { p, T, N } = frame(Math.max(0.001, Math.min(0.999, rc.t)));
-        const ahead = river.getPointAt(Math.min(0.999, rc.t + 0.028));
-        const eye = p.clone().sub(T.clone().multiplyScalar(7.5)).add(N.clone().multiplyScalar(Math.sin(ctx.t * 0.2) * 0.8)).setY(3.6 + Math.sin(ctx.t * 0.5) * 0.08);
+        const ahead = river.getPointAt(Math.min(0.994, rc.t + 0.028));
+        const eye = p.clone().sub(T.clone().multiplyScalar(7.5)).add(N.clone().multiplyScalar(Math.sin(ctx.t * 0.2) * 0.8)).setY(3.4 + Math.sin(ctx.t * 0.5) * 0.08);
         camera.position.lerp(eye, Math.min(1, dt * 4));
         const look = ahead.clone().setY(1.3);
         const rot = new THREE.Vector3().subVectors(look, camera.position).applyAxisAngle(up, rc.yaw);
         rot.y += rc.pitch * rot.length() * 0.5;
         camera.lookAt(camera.position.clone().add(rot));
-        // 天色随阶段渐变
-        const idx = Math.max(0, Math.min(n - 1, Math.round(rc.t * (n + 3) - 1.5)));
-        fogTarget.copy(colorAt[idx]).multiplyScalar(0.18).lerp(new THREE.Color(0x0d1030), 0.45);
+        fogTarget.copy(colorNear(rc.t)).multiplyScalar(0.14).lerp(new THREE.Color(0x080a1c), 0.5);
         scene.fog.color.lerp(fogTarget, Math.min(1, dt * 1.5));
         ctx.renderer.setClearColor(scene.fog.color);
       },
@@ -625,7 +737,24 @@
       jumpToday() { rc.tT = todayT - 0.012; },
     };
     ctx.onClick = obj => { if (MARVEL.ui) MARVEL.ui.openDetail(obj.userData.id); };
-    ctx.onFrame = () => { cards.forEach(c => { const s = ctx.hovered === c ? 1.12 : 1; c.userData.g.scale.x += (s - c.userData.g.scale.x) * 0.15; c.userData.g.scale.y = c.userData.g.scale.x; }); };
+    ctx.onFrame = (dt, t) => {
+      updateFlow(dt);
+      arcs.forEach((a, i) => { a.arc.material.opacity = 0.1 + Math.sin(t * 1.2 + i * 0.6) * 0.05; });
+      const k = Math.min(1, dt * 7);
+      cards.forEach(c => {
+        const hot = ctx.hovered === c.card;
+        // 升起 + 转向镜头 + 发光
+        const ty = c.baseY + (hot ? 0.45 : 0);
+        c.g.position.y += (ty - c.g.position.y) * k;
+        if (hot) { tmpO.position.copy(c.g.position); tmpO.lookAt(camera.position.x, c.g.position.y, camera.position.z); tmpQ.copy(tmpO.quaternion); } else tmpQ.copy(c.baseQ);
+        c.g.quaternion.slerp(tmpQ, k);
+        const sc = hot ? 1.1 : 1; c.g.scale.x += (sc - c.g.scale.x) * k; c.g.scale.y = c.g.scale.x;
+        lerpOpacity(c.halo.material, hot ? 0.9 : (c.watched ? 0.42 : 0), k);
+        const hs = hot ? 5.2 + Math.sin(t * 4) * 0.3 : 4.2; c.halo.scale.x += (hs - c.halo.scale.x) * k; c.halo.scale.y = c.halo.scale.x;
+        lerpOpacity(c.fr.material, hot ? 1 : (c.watched ? 0.9 : 0.9), k);
+        const ls = hot ? 1.18 : 1; c.lab.scale.x += (c.labScale.x * ls - c.lab.scale.x) * k; c.lab.scale.y += (c.labScale.y * ls - c.lab.scale.y) * k;
+      });
+    };
   }
 
   /* ========================================================================
@@ -636,16 +765,16 @@
   async function mount(kind, host, opts) {
     unmount();
     if (!host) return;
-    host.innerHTML = '<div class="three-loading">🪐 正在加载高阶视图…</div>';
+    const loading = document.createElement('div'); loading.className = 'three-loading'; loading.textContent = '🪐 正在加载高阶视图…'; host.appendChild(loading);
     const token = (mount._token = (mount._token || 0) + 1);
-    try { await loadThree(); } catch (e) { host.innerHTML = `<div class="three-loading">⚠️ ${e.message}</div>`; return; }
+    try { await loadThree(); } catch (e) { loading.textContent = `⚠️ ${e.message}`; return; }
     if (token !== mount._token || !host.isConnected) return;
     try {
       const ctx = createStage(host, kind);
       MOUNTERS[kind](ctx, opts || {});
       ctx.start();
       cur = ctx;
-    } catch (e) { console.error(e); host.innerHTML = `<div class="three-loading">⚠️ 高阶视图渲染失败:${e.message}</div>`; }
+    } catch (e) { console.error(e); const err = document.createElement('div'); err.className = 'three-loading'; err.textContent = `⚠️ 高阶视图渲染失败:${e.message}`; host.appendChild(err); }
   }
   function unmount() { if (cur) { disposeStage(cur); cur = null; } }
   function resetCamera() { if (cur && cur.cam && cur.cam.reset) cur.cam.reset(); }

@@ -2184,3 +2184,37 @@ details.egg-details p { font-size: 13px; color: var(--muted); margin-top: 8px; }
 }
 .three-tip small { color: var(--muted); }
 @media (max-width: 900px) { .three-wrap { height: 480px; } }
+
+/* 高阶版画布内 HUD 图例 */
+.three-hud {
+  position: absolute;
+  top: 14px; left: 14px;
+  z-index: 6;
+  max-width: min(420px, 60%);
+  background: rgba(8, 11, 24, 0.55);
+  border: 1px solid rgba(140, 160, 255, 0.16);
+  border-radius: 14px;
+  padding: 12px 14px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+.hud-title { font-size: 10.5px; font-weight: 900; letter-spacing: 3px; color: rgba(180, 195, 255, 0.6); margin: 2px 0 8px; }
+.hud-title + .hud-keys, .hud-chips + .hud-title { margin-top: 10px; }
+.hud-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.three-hud .legend-chip {
+  font-size: 11.5px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(220, 228, 255, 0.8);
+}
+.three-hud .legend-chip .lc-dot { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 8px var(--c), 0 0 2px #fff; }
+.three-hud .legend-chip.on { background: color-mix(in srgb, var(--c) 22%, rgba(8, 11, 24, 0.6)); border-color: var(--c); color: #fff; box-shadow: 0 0 14px color-mix(in srgb, var(--c) 45%, transparent); }
+.three-hud .lc-count { color: rgba(200, 210, 255, 0.5); }
+.hud-keys { display: flex; flex-wrap: wrap; gap: 10px 14px; }
+.hud-keys .rel-key { font-size: 11.5px; color: rgba(220, 228, 255, 0.75); }
+.hud-keys .rel-key i { width: 18px; height: 2.5px; }
+@media (max-width: 900px) { .three-hud { max-width: 70%; padding: 10px; } }
+.three-wrap[data-kind="map"] .three-hud { top: auto; bottom: 14px; max-width: 78%; }
+.three-wrap[data-kind="map"] .hud-title { display: none; }

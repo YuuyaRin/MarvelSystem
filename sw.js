@@ -1,7 +1,7 @@
 /* MARVEL 宇宙观影指挥中心 — Service Worker
    策略:核心文件预缓存;同源请求「网络优先、缓存兜底」,保证更新即时、离线可用。 */
 
-const VERSION = 'v15';
+const VERSION = 'v17';
 const CACHE = `marvel-system-${VERSION}`;
 
 const CORE = [
@@ -9,18 +9,18 @@ const CORE = [
   'index.html',
   'manifest.webmanifest',
   'css/style.css',
-  `js/data.js?v=15`,
-  `js/posters.js?v=15`,
-  `js/characters.js?v=15`,
-  `js/lore.js?v=15`,
-  `js/insights.js?v=15`,
-  `js/routes.js?v=15`,
-  `js/store.js?v=15`,
-  `js/report.js?v=15`,
-  `js/timeline-axis.js?v=15`,
-  `js/lab3d.js?v=15`,
-  `js/three-views.js?v=15`,
-  `js/app.js?v=15`,
+  `js/data.js?v=17`,
+  `js/posters.js?v=17`,
+  `js/characters.js?v=17`,
+  `js/lore.js?v=17`,
+  `js/insights.js?v=17`,
+  `js/routes.js?v=17`,
+  `js/store.js?v=17`,
+  `js/report.js?v=17`,
+  `js/timeline-axis.js?v=17`,
+  `js/lab3d.js?v=17`,
+  `js/three-views.js?v=17`,
+  `js/app.js?v=17`,
   'vendor/three.min.js',
   'icons/icon-192.png',
   'icons/icon-512.png',

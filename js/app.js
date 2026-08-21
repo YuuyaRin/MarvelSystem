@@ -607,18 +607,17 @@
       </div>`;
     })() : '';
 
+    const legendChips = threadIds.map(tid => {
+      const th = MARVEL.THREADS[tid];
+      const members = works.filter(w => w.threads.includes(tid));
+      const done = members.filter(w => S.isWatched(w.id)).length;
+      return `<span class="legend-chip ${activeThread === tid ? 'on' : ''}" data-thread="${tid}" style="--c:${th.color}"><span class="lc-dot"></span>${th.emoji} ${esc(th.name)}<i class="lc-count">${done}/${members.length}</i></span>`;
+    }).join('') + (activeThread ? `<span class="legend-chip" data-thread="">✕ ${mode3d().map ? '' : '清除高亮'}</span>` : '');
+
     return `
     <div class="section-title"><span class="st-main">UNIVERSE MAP</span><span class="st-sub">宇宙链路图 · ${mode3d().map ? '星轨模式' : '像地铁线路一样追踪每条故事线'}</span>${modeToggle('map')}</div>
-    <div class="map-legend">
-      ${threadIds.map(tid => {
-        const th = MARVEL.THREADS[tid];
-        const members = works.filter(w => w.threads.includes(tid));
-        const done = members.filter(w => S.isWatched(w.id)).length;
-        return `<span class="legend-chip ${activeThread === tid ? 'on' : ''}" data-thread="${tid}" style="--c:${th.color}"><span class="lc-dot"></span>${th.emoji} ${esc(th.name)}<i class="lc-count">${done}/${members.length}</i></span>`;
-      }).join('')}
-      ${activeThread ? '<span class="legend-chip" data-thread="">✕ 清除高亮</span>' : ''}
-    </div>
-    ${mode3d().map ? threeHost('map') + threadDetail + `
+    ${mode3d().map ? '' : `<div class="map-legend">${legendChips}</div>`}
+    ${mode3d().map ? threeHost('map', '', `<div class="hud-title">故事线</div><div class="hud-chips">${legendChips}</div>`) + threadDetail + `
     <div class="map-hint">✨ 星轨模式:作品按上映顺序由内向外排在螺旋轨道上(轨道颜色=阶段),故事线是跨越轨道的光弧;点击图例锁定线路后光弧升亮、彗星沿线飞行并标出顺序号,金色光柱为「下一站」。拖拽旋转 · 滚轮缩放。</div>` : `
     <div class="graph-wrap">
       <svg id="metro-svg" viewBox="0 0 ${W} ${H}">
@@ -728,8 +727,9 @@
   /* 高阶版(2.5D)开关 */
   const mode3d = () => S.state.settings.mode3d || {};
   const modeToggle = kind => `<button class="btn btn-sm ${mode3d()[kind] ? 'btn-gold' : 'btn-ghost'} mode-toggle" data-mode3d="${kind}">${mode3d()[kind] ? '📄 切回扁平版' : '✨ 切换高阶版'}</button>`;
-  const threeHost = (kind, extraBtns) => `
+  const threeHost = (kind, extraBtns, hud) => `
     <div class="three-wrap" id="three-host" data-kind="${kind}">
+      ${hud ? `<div class="three-hud">${hud}</div>` : ''}
       <div class="graph-tools">
         <button class="gt-btn" id="three-reset" title="复位视角">⛶</button>
         ${extraBtns || ''}
@@ -745,14 +745,21 @@
     const factions = Object.entries(MARVEL.FACTIONS);
     return `
     <div class="section-title"><span class="st-main">CHARACTER WEB</span><span class="st-sub">角色关系图谱 · ${mode3d().characters ? '星座模式' : '拖拽节点'} · 点击查看角色档案</span>${modeToggle('characters')}</div>
-    <div class="map-legend">
-      ${factions.map(([fid, f]) => `<span class="legend-chip ${activeFaction === fid ? 'on' : ''}" data-faction="${fid}" style="--c:${f.color}"><span class="lc-dot"></span>${f.name}</span>`).join('')}
-      ${activeFaction ? '<span class="legend-chip" data-faction="">✕ 清除</span>' : ''}
-    </div>
-    <div class="map-legend rel-legend">
-      ${Object.entries(REL_STYLE).map(([t, r]) => `<span class="rel-key"><i style="background:${r.color}"></i>${r.name}</span>`).join('')}
-    </div>
-    ${mode3d().characters ? threeHost('characters') + `
+    ${(() => {
+      const factionLegend = `<div class="map-legend">
+        ${factions.map(([fid, f]) => `<span class="legend-chip ${activeFaction === fid ? 'on' : ''}" data-faction="${fid}" style="--c:${f.color}"><span class="lc-dot"></span>${f.name}</span>`).join('')}
+        ${activeFaction ? '<span class="legend-chip" data-faction="">✕ 清除</span>' : ''}
+      </div>`;
+      const relLegend = `<div class="map-legend rel-legend">
+        ${Object.entries(REL_STYLE).map(([t, r]) => `<span class="rel-key"><i style="background:${r.color}"></i>${r.name}</span>`).join('')}
+      </div>`;
+      return mode3d().characters ? '' : factionLegend + relLegend;
+    })()}
+    ${mode3d().characters ? threeHost('characters', '', `
+        <div class="hud-title">阵营</div>
+        <div class="hud-chips">${factions.map(([fid, f]) => `<span class="legend-chip ${activeFaction === fid ? 'on' : ''}" data-faction="${fid}" style="--c:${f.color}"><span class="lc-dot"></span>${f.name}</span>`).join('')}${activeFaction ? '<span class="legend-chip" data-faction="">✕</span>' : ''}</div>
+        <div class="hud-title">关系</div>
+        <div class="hud-keys">${Object.entries(REL_STYLE).map(([t, r]) => `<span class="rel-key" style="--c:${r.color}"><i style="background:${r.color};box-shadow:0 0 8px ${r.color}"></i>${r.name}</span>`).join('')}</div>`) + `
     <div class="map-hint">✨ 星座模式:角色化作星辰、阵营聚为星云;悬停一颗星,它的关系会亮成光轨并有火花流动。小幅拖拽可环视,滚轮缩放,点击星辰看档案。</div>` : `
     <div class="graph-wrap">
       <svg id="char-svg"></svg>
