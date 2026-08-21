@@ -506,10 +506,10 @@
       <button class="btn ${tlMode === 'release' ? 'btn-primary' : 'btn-ghost'}" data-tlmode="release">🎬 上映顺序</button>
       <button class="btn ${tlMode === 'chrono' ? 'btn-primary' : 'btn-ghost'}" data-tlmode="chrono">📖 故事时间线</button>
       <button class="btn ${tlMode === 'axis' ? 'btn-primary' : 'btn-ghost'}" data-tlmode="axis">🧭 动态年代轴</button>
-      <button class="btn ${tlMode === 'corridor' ? 'btn-primary' : 'btn-ghost'}" data-tlmode="corridor">✨ 年代长廊</button>
+      <button class="btn ${tlMode === 'corridor' ? 'btn-primary' : 'btn-ghost'}" data-tlmode="corridor">✨ 时光之河</button>
     </div>
     ${tlMode === 'corridor'
-      ? threeHost('corridor', '<button class="gt-btn" id="three-today" title="跳到今天">📍</button>') + '<div class="map-hint">✨ 年代长廊:滚轮沿时间前进/后退 · 拖拽微调视角 · 海报立牌按三列排布,金框为已看,阶段色带铺地,金门为今天。点击海报看详情。</div>'
+      ? threeHost('corridor', '<button class="gt-btn" id="three-today" title="跳到今天">📍</button>') + '<div class="map-hint">✨ 时光之河:滚轮沿河道前进/后退(按作品等距排布,疏密年份一视同仁)· 拖拽微调视角 · 海报立于两岸,金框为已看;拱门为阶段起点,金门为今天,天色随阶段变化。点击海报看详情。</div>'
       : (tlMode === 'axis' ? MARVEL.axis.html() : `<div class="tl-wrap">${content}</div>`)}`;
   }
 
@@ -608,7 +608,7 @@
     })() : '';
 
     return `
-    <div class="section-title"><span class="st-main">UNIVERSE MAP</span><span class="st-sub">宇宙链路图 · ${mode3d().map ? '立体地铁模式' : '像地铁线路一样追踪每条故事线'}</span>${modeToggle('map')}</div>
+    <div class="section-title"><span class="st-main">UNIVERSE MAP</span><span class="st-sub">宇宙链路图 · ${mode3d().map ? '星轨模式' : '像地铁线路一样追踪每条故事线'}</span>${modeToggle('map')}</div>
     <div class="map-legend">
       ${threadIds.map(tid => {
         const th = MARVEL.THREADS[tid];
@@ -619,7 +619,7 @@
       ${activeThread ? '<span class="legend-chip" data-thread="">✕ 清除高亮</span>' : ''}
     </div>
     ${mode3d().map ? threeHost('map') + threadDetail + `
-    <div class="map-hint">✨ 立体地铁:9 条故事线分层悬浮,竖井表示换乘;点击图例锁定线路后该线升亮并出现粒子流与顺序号,金色光柱为「下一站」。拖拽旋转 · Shift+拖拽平移 · 滚轮缩放。</div>` : `
+    <div class="map-hint">✨ 星轨模式:作品按上映顺序由内向外排在螺旋轨道上(轨道颜色=阶段),故事线是跨越轨道的光弧;点击图例锁定线路后光弧升亮、彗星沿线飞行并标出顺序号,金色光柱为「下一站」。拖拽旋转 · 滚轮缩放。</div>` : `
     <div class="graph-wrap">
       <svg id="metro-svg" viewBox="0 0 ${W} ${H}">
         ${paths}
@@ -744,7 +744,7 @@
   function viewCharacters() {
     const factions = Object.entries(MARVEL.FACTIONS);
     return `
-    <div class="section-title"><span class="st-main">CHARACTER WEB</span><span class="st-sub">角色关系图谱 · ${mode3d().characters ? '星系模式' : '拖拽节点'} · 点击查看角色档案</span>${modeToggle('characters')}</div>
+    <div class="section-title"><span class="st-main">CHARACTER WEB</span><span class="st-sub">角色关系图谱 · ${mode3d().characters ? '星座模式' : '拖拽节点'} · 点击查看角色档案</span>${modeToggle('characters')}</div>
     <div class="map-legend">
       ${factions.map(([fid, f]) => `<span class="legend-chip ${activeFaction === fid ? 'on' : ''}" data-faction="${fid}" style="--c:${f.color}"><span class="lc-dot"></span>${f.name}</span>`).join('')}
       ${activeFaction ? '<span class="legend-chip" data-faction="">✕ 清除</span>' : ''}
@@ -753,7 +753,7 @@
       ${Object.entries(REL_STYLE).map(([t, r]) => `<span class="rel-key"><i style="background:${r.color}"></i>${r.name}</span>`).join('')}
     </div>
     ${mode3d().characters ? threeHost('characters') + `
-    <div class="map-hint">✨ 星系模式:拖拽旋转星盘 · Shift+拖拽平移 · 滚轮缩放 · 悬停聚焦关系 · 点击星体看档案。阵营聚为星云,关系为弧形光轨。</div>` : `
+    <div class="map-hint">✨ 星座模式:角色化作星辰、阵营聚为星云;悬停一颗星,它的关系会亮成光轨并有火花流动。小幅拖拽可环视,滚轮缩放,点击星辰看档案。</div>` : `
     <div class="graph-wrap">
       <svg id="char-svg"></svg>
       <div class="graph-tools">
