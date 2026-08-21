@@ -506,8 +506,11 @@
       <button class="btn ${tlMode === 'release' ? 'btn-primary' : 'btn-ghost'}" data-tlmode="release">🎬 上映顺序</button>
       <button class="btn ${tlMode === 'chrono' ? 'btn-primary' : 'btn-ghost'}" data-tlmode="chrono">📖 故事时间线</button>
       <button class="btn ${tlMode === 'axis' ? 'btn-primary' : 'btn-ghost'}" data-tlmode="axis">🧭 动态年代轴</button>
+      <button class="btn ${tlMode === 'corridor' ? 'btn-primary' : 'btn-ghost'}" data-tlmode="corridor">✨ 年代长廊</button>
     </div>
-    ${tlMode === 'axis' ? MARVEL.axis.html() : `<div class="tl-wrap">${content}</div>`}`;
+    ${tlMode === 'corridor'
+      ? threeHost('corridor', '<button class="gt-btn" id="three-today" title="跳到今天">📍</button>') + '<div class="map-hint">✨ 年代长廊:滚轮沿时间前进/后退 · 拖拽微调视角 · 海报立牌按三列排布,金框为已看,阶段色带铺地,金门为今天。点击海报看详情。</div>'
+      : (tlMode === 'axis' ? MARVEL.axis.html() : `<div class="tl-wrap">${content}</div>`)}`;
   }
 
   /* ==========================================================================
@@ -605,7 +608,7 @@
     })() : '';
 
     return `
-    <div class="section-title"><span class="st-main">UNIVERSE MAP</span><span class="st-sub">宇宙链路图 · 像地铁线路一样追踪每条故事线</span></div>
+    <div class="section-title"><span class="st-main">UNIVERSE MAP</span><span class="st-sub">宇宙链路图 · ${mode3d().map ? '立体地铁模式' : '像地铁线路一样追踪每条故事线'}</span>${modeToggle('map')}</div>
     <div class="map-legend">
       ${threadIds.map(tid => {
         const th = MARVEL.THREADS[tid];
@@ -615,6 +618,8 @@
       }).join('')}
       ${activeThread ? '<span class="legend-chip" data-thread="">✕ 清除高亮</span>' : ''}
     </div>
+    ${mode3d().map ? threeHost('map') + threadDetail + `
+    <div class="map-hint">✨ 立体地铁:9 条故事线分层悬浮,竖井表示换乘;点击图例锁定线路后该线升亮并出现粒子流与顺序号,金色光柱为「下一站」。拖拽旋转 · Shift+拖拽平移 · 滚轮缩放。</div>` : `
     <div class="graph-wrap">
       <svg id="metro-svg" viewBox="0 0 ${W} ${H}">
         ${paths}
@@ -627,7 +632,7 @@
       </div>
     </div>
     ${threadDetail}
-    <div class="map-hint">💡 点击图例锁定一条故事线(未锁定时悬停图例可预览);高亮线会画出行进动画,并标出观看顺序号与「下一站」。滚轮缩放 · 拖拽空白平移 · 金色站点已观看。</div>`;
+    <div class="map-hint">💡 点击图例锁定一条故事线(未锁定时悬停图例可预览);高亮线会画出行进动画,并标出观看顺序号与「下一站」。滚轮缩放 · 拖拽空白平移 · 金色站点已观看。</div>`}`;
   }
 
   /* 宇宙链路:缩放 / 平移 / 图例悬停预览 */
@@ -720,6 +725,17 @@
       .sort((a, b) => a.release.localeCompare(b.release));
   }
 
+  /* 高阶版(2.5D)开关 */
+  const mode3d = () => S.state.settings.mode3d || {};
+  const modeToggle = kind => `<button class="btn btn-sm ${mode3d()[kind] ? 'btn-gold' : 'btn-ghost'} mode-toggle" data-mode3d="${kind}">${mode3d()[kind] ? '📄 切回扁平版' : '✨ 切换高阶版'}</button>`;
+  const threeHost = (kind, extraBtns) => `
+    <div class="three-wrap" id="three-host" data-kind="${kind}">
+      <div class="graph-tools">
+        <button class="gt-btn" id="three-reset" title="复位视角">⛶</button>
+        ${extraBtns || ''}
+      </div>
+    </div>`;
+
   /* 称号优先展示:钢铁侠(托尼·斯塔克) */
   function charLabel(c) { return c.title || c.name; }
   function charSub(c) { return c.title && c.title !== c.name ? c.name : ''; }
@@ -728,7 +744,7 @@
   function viewCharacters() {
     const factions = Object.entries(MARVEL.FACTIONS);
     return `
-    <div class="section-title"><span class="st-main">CHARACTER WEB</span><span class="st-sub">角色关系图谱 · 拖拽节点 · 点击查看角色档案</span></div>
+    <div class="section-title"><span class="st-main">CHARACTER WEB</span><span class="st-sub">角色关系图谱 · ${mode3d().characters ? '星系模式' : '拖拽节点'} · 点击查看角色档案</span>${modeToggle('characters')}</div>
     <div class="map-legend">
       ${factions.map(([fid, f]) => `<span class="legend-chip ${activeFaction === fid ? 'on' : ''}" data-faction="${fid}" style="--c:${f.color}"><span class="lc-dot"></span>${f.name}</span>`).join('')}
       ${activeFaction ? '<span class="legend-chip" data-faction="">✕ 清除</span>' : ''}
@@ -736,6 +752,8 @@
     <div class="map-legend rel-legend">
       ${Object.entries(REL_STYLE).map(([t, r]) => `<span class="rel-key"><i style="background:${r.color}"></i>${r.name}</span>`).join('')}
     </div>
+    ${mode3d().characters ? threeHost('characters') + `
+    <div class="map-hint">✨ 星系模式:拖拽旋转星盘 · Shift+拖拽平移 · 滚轮缩放 · 悬停聚焦关系 · 点击星体看档案。阵营聚为星云,关系为弧形光轨。</div>` : `
     <div class="graph-wrap">
       <svg id="char-svg"></svg>
       <div class="graph-tools">
@@ -745,7 +763,7 @@
         <button class="gt-btn" id="gt-relayout" title="重新布局">🔄</button>
       </div>
     </div>
-    <div class="map-hint">💡 滚轮缩放 · 拖拽空白处平移 · 拖拽节点重排 · 悬停聚焦一位角色的所有关系 · 点击节点看档案。</div>
+    <div class="map-hint">💡 滚轮缩放 · 拖拽空白处平移 · 拖拽节点重排 · 悬停聚焦一位角色的所有关系 · 点击节点看档案。</div>`}
 
     <div class="section-title"><span class="st-main">ROSTER</span><span class="st-sub">角色名册 · ${MARVEL.CHARACTERS.length} 位</span></div>
     <div class="roster-grid">
@@ -1485,10 +1503,13 @@
   function render() {
     const view = currentView();
     $$('#sidebar .nav-item').forEach(el => el.classList.toggle('active', el.dataset.view === view));
+    if (MARVEL.three) MARVEL.three.unmount();
     $('#view-container').innerHTML = VIEWS[view]();
-    if (view === 'characters') initCharGraph();
-    if (view === 'map') initMetroMap();
+    const host = $('#three-host');
+    if (view === 'characters') { if (host) MARVEL.three.mount('characters', host, { activeFaction }); else initCharGraph(); }
+    if (view === 'map') { if (host) MARVEL.three.mount('map', host, { activeThread }); else initMetroMap(); }
     if (view === 'timeline' && tlMode === 'axis') MARVEL.axis.init();
+    if (view === 'timeline' && tlMode === 'corridor' && host) MARVEL.three.mount('corridor', host, {});
     updateSidebar();
   }
 
@@ -1700,6 +1721,18 @@
 
     // 响指
     if (t.closest('#btn-snap')) { doSnap(); return; }
+
+    // 高阶版开关 / 相机按钮
+    const mt = t.closest('[data-mode3d]');
+    if (mt) {
+      const kind = mt.dataset.mode3d;
+      const m = Object.assign({}, mode3d()); m[kind] = !m[kind];
+      S.setSetting('mode3d', m);
+      render();
+      return;
+    }
+    if (t.closest('#three-reset')) { MARVEL.three.resetCamera(); return; }
+    if (t.closest('#three-today')) { MARVEL.three.jumpToday(); return; }
 
     // 战报分享卡 / 3D 实验室
     if (t.closest('#btn-report')) { MARVEL.report.open(); return; }
